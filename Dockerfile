@@ -1,4 +1,4 @@
-FROM python:3.8.16-bullseye AS builder
+FROM python:3.8.16-buster AS builder
 
 LABEL maintainer="juandacorreo@gmail.com"
 
@@ -48,10 +48,10 @@ RUN export FL_VERSION=4.2 && \
     apt-get --purge -y remove build-essential libicu-dev \
             libboost-regex-dev libboost-system-dev \
             libboost-program-options-dev libboost-thread-dev \
-	    libboost-filesystem-dev zlib1g-dev\
+	        libboost-filesystem-dev zlib1g-dev\
             cmake wget swig python3-dev && \
-    apt-get clean -y && \
-    rm -rf /var/lib/apt/lists/*         
+    apt-get clean -y #&& \
+    # rm -rf /var/lib/apt/lists/*         
 
 # WORKDIR /root
 
@@ -68,11 +68,15 @@ WORKDIR /app
 
 # Install app dependencies
 COPY requirements.txt ./
-RUN apt-get update -qq && \
-    apt-get install -qq -y default-libmysqlclient-dev && \
-    apt-get clean -y && \
-    rm -rf /var/lib/apt/lists/*  
 
+
+# RUN echo "deb-src http://deb.debian.org/debian bullseye main" >> /etc/apt/sources.list
+
+RUN apt-get update -qq && \
+    apt-get install -qq -y default-libmysqlclient-dev python3-lxml && \
+    apt-get clean -y 
+
+RUN pip install lxml
 RUN pip install -r requirements.txt
 
 # Bundle app source
