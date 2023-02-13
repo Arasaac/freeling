@@ -51,30 +51,21 @@ RUN export FL_VERSION=4.2 && \
 	        libboost-filesystem-dev zlib1g-dev\
             cmake wget swig python3-dev && \
     apt-get clean -y #&& \
-    # rm -rf /var/lib/apt/lists/*         
-
-# WORKDIR /root
-
-# EXPOSE 50005
-# CMD echo 'Hello world' | analyze -f en.cfg | grep -c 'world world NN 1'
-
-
-# FROM python:3.8.16-bullseye
-# WORKDIR /root/
-# COPY --from=builder /usr/local /usr/local
-
-# Create app directory
-WORKDIR /app
-
-# Install app dependencies
-COPY requirements.txt ./
-
+    rm -rf /var/lib/apt/lists/*         
 
 # RUN echo "deb-src http://deb.debian.org/debian bullseye main" >> /etc/apt/sources.list
 
 RUN apt-get update -qq && \
     apt-get install -qq -y default-libmysqlclient-dev python3-lxml && \
     apt-get clean -y 
+
+# Create app directory
+WORKDIR /app
+
+# Install app dependencies
+COPY requirements.txt ./
+ENV LD_LIBRARY_PATH=/usr/local/share/freeling/APIs/python3
+ENV PYTHONPATH=/usr/local/share/freeling/APIs/python3
 
 RUN pip install lxml
 RUN pip install -r requirements.txt
