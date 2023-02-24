@@ -70,6 +70,11 @@ ENV PYTHONPATH=/usr/local/share/freeling/APIs/python3
 RUN pip install lxml
 RUN pip install -r requirements.txt
 
+# este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos 
+# irregulares.este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos irregulares.
+
+COPY es-verbs.txt /usr/local/lib/python3.8/site-packages/pattern/text/es/
+
 # Bundle app source
 COPY . .
 EXPOSE 5000
