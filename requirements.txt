@@ -1,3 +1,3 @@
 Flask==2.2.2
-pattern==3.6
+Pattern==3.6
 pyfreeling==0.1.1
