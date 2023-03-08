@@ -57,7 +57,6 @@ verbosexcepciones=['ser','haber']
 
 conjuncionestemporalespresente=['mientras','cuando']
 
-
 def Analizador():
 
     print('Init models')   
@@ -103,7 +102,7 @@ def Analizador():
                           True,  # NERecognition,     
                           False, # QuantitiesDetection,  
                           True); # ProbabilityAssignment     
-
+ 
     return tk,sp,mf,tagger #,sen,wsd,parser,dep
 
 def leer_nombres():
@@ -134,8 +133,7 @@ def lematiza(tk,sp,mf,tagger,texto):
             tag=w.get_tag()
         data.append([w.get_form().replace('_',' '),w.get_lemma(),tag])
     return ls,lemas,data
-
-  
+    
 def get_pronombre(data,pi,p):
     out=[1,SG]
     pout=-1
@@ -264,10 +262,11 @@ def get_numerofrases(data):
     p=[]
     comma=False
     fs=False
+
     for pos,item in enumerate(data):
         if 'CS' in item[2][0:2] and pos>0:
             pf=4
-            pp=pos 
+            pp=pos+1
             fs=True
         if (pf==0) and ('V' in item[2][0]):
             pf=1
@@ -276,7 +275,7 @@ def get_numerofrases(data):
             pp=pos
         if (pf==1) and (('P' in item[2][0])):# or ('S' in item[2][0])):
             pf=2
-            pp=pos#-1
+            pp=pos+1#-1
         # comentado porque crea problemas, p.e. el coche ser muy grande pero la perdíz ser rojo.
         # muy es "RG", corta la frase ahí y la siguiente como aun un pero "CC" la detecta como sujeto
         # múltiple y rojo pasa a ser plural.
@@ -299,12 +298,13 @@ def get_numerofrases(data):
             else:
                 pf=1
             p.append((pi,pp-1))
-            if comma or fs:
+            if comma:# or fs:
                 pi=pp+1
             else:
                 pi=pp
             comma=False
             fs=False
+
     p.append((pi,pos))
     return p,nf
 
@@ -366,7 +366,32 @@ def cambia_verbo_gerundio(data,pi,pf):
 def cambiageneroynumero(adjective, gender=MALE,debug=False):
 
     w = adjective.lower()
-
+    # demostrativos
+    if w=='este':
+        if SINGULAR in gender and FEMALE in gender:   
+            return 'esta'
+        if PLURAL in gender and FEMALE in gender:
+            return 'estas'
+    if w=='ese':
+        if SINGULAR in gender and FEMALE in gender:
+            return 'esa'
+    if w=='aquel':
+        if SINGULAR in gender and FEMALE in gender:
+            return 'aquella'
+        if PLURAL in gender:
+            if MALE in gender:
+                return 'aquellos'
+            if FEMALE in gender:
+                return 'aquellas'
+    if w=='aquellos':
+        if SINGULAR in gender:
+            if MALE in gender:
+                return 'aquel'
+            if FEMALE in gender:
+                return 'aquella' 
+    if w=='aquella':
+        if SINGULAR in gender and MALE in gender:
+            return 'aquel'
     # determinante posesivo mi - mis
     if PLURAL in gender and w=='mi':
         return 'mis'
@@ -380,11 +405,35 @@ def cambiageneroynumero(adjective, gender=MALE,debug=False):
         return 'sus'
     if SINGULAR in gender and w=='sus':
         return 'su'
+    if MALE in gender and SINGULAR in gender and w=='la':
+        return 'el'
+    if FEMALE in gender and SINGULAR in gender and w=='el':
+        return 'la'
+    if SINGULAR in gender and MALE in gender and w=='los':
+        return 'el'
     if PLURAL in gender and FEMALE in gender:
         if w=='el':
             return 'las'
         if w=='los':
             return 'las'
+    if PLURAL in gender and MALE in gender:
+        if w=='el':
+            return 'los'
+        if w=='la':
+            return 'los'
+    if PLURAL in gender and FEMALE in gender:
+        if w=='el':
+            return 'las'
+    if SINGULAR in gender and w=='muchas':
+        return 'una'
+    if SINGULAR in gender and w=='muchos':
+        return 'un'
+    if SINGULAR in gender and MALE in gender and (w=='una' or w=='unas' or w=='uno' or w=='unos'):  
+        return 'un'
+    if SINGULAR in gender and FEMALE in gender and w=='un':  
+        return 'una'
+    if SINGULAR in gender and w=='estos':
+        return 'este'
     if PLURAL in gender and w.endswith("z"):
         return w[:-1]+"ces"
     if MALE in gender and PLURAL in gender and w.endswith("n"):
@@ -584,10 +633,9 @@ def cambiaconcordanciasadjetivo(data,pi,pf,gender,debug=False):
                 data[pos][2]=data[pos][2][0:5]+gender[0].upper()+gender[1].upper()
             if ('A' in item[2][0]) and (item[2][2:4]!=gender[0:2].upper()):
                 if SINGULAR in gender:
-                    item[0]=item[1] # ponemos el lema)
-                
+                    item[0]=item[1] # ponemos el lema)               
                 agn=cambiageneroynumero(item[0],gender=gender,debug=debug)
-#                st.write('cambiaconcordanciasadjetivo:',item[0],gender,agn)
+
                 data[pos][0]=agn
                 data[pos][2]=data[pos][2][0:3]+gender[0].upper()+gender[1].upper()+data[pos][2][5:]
             if ('N' in item[2][0]) and (item[2][2:4]!=gender[0:2].upper()):
@@ -602,7 +650,7 @@ def cambiaconcordanciasadjetivo(data,pi,pf,gender,debug=False):
 def cambiaconcordanciadeterminante(data,pi,pf,gender,debug=False):
     for pos,item in enumerate(data):
         if pos>=pi and pos <=pf:
-            if 'D' in item[2][0] :
+            if 'D' in item[2][0] or 'PD' in item[2][0:2]:
                 dgn=cambiageneroynumero(item[0],gender=gender)
                 data[pos][0]=dgn
                 data[pos][2]=data[pos][2][0:3]+gender[0].upper()+gender[1].upper()+data[pos][2][5:]
@@ -614,6 +662,7 @@ def concordanciacopulativa(data,pi,pf,posps,posv,debug=False):
 # ahora miramos la concordancia del adjetivo o atributo y su determinante
     dagn=get_determinantegeneroynumero(data,posv,pf[0])
     agn=get_adjetivogeneroynumero(data,posv,pf[0])
+
     if sgn[0]=='C' and dgn[0]!='X':
         sgn=dgn
     if agn[0]!='C':
@@ -627,10 +676,92 @@ def concordanciacopulativa(data,pi,pf,posps,posv,debug=False):
             gender=gender+SINGULAR
     else:
         gender=gender+NEUTRAL
+
     data=cambiaconcordanciadeterminante(data,posv,pf[0],gender,debug=debug)
     data=cambiaconcordanciasadjetivo(data,posv,pf[0],gender,debug=debug)
 #    st.write(data)    
 
+    return data
+
+def concordanciasustantivodeterminante(data,pi,pf,debug=False):
+    sgn=get_sujetogeneroynumero(data,pi,pf)
+    dgn=get_determinantegeneroynumero(data,pi,pf)
+    agn=get_adjetivogeneroynumero(data,pi,pf)
+    num=get_numbers(data,pi,pf)
+
+    if dgn!='XX':
+        if sgn!='NN':
+            if dgn!=sgn or (dgn!=agn and agn!='XX'):
+                if sgn[0]!=dgn[0]:
+                    if sgn[0]!='C' and dgn[0]!='C':
+                        gender=sgn[0].lower()
+    #                    if dgn[0]=='C':
+    #                        gender=sgn[0].lower()
+                    else:
+                    #    gender='c'
+                        gender=dgn[0].lower()
+                else:
+                    gender=sgn[0].lower()
+                if sgn[1]!='N':
+                    if sgn[1]=='P':
+                        gender=gender+PLURAL
+                    else:
+                        gender=gender+SINGULAR
+                else:
+                    gender=gender+NEUTRAL
+
+                if gender[0:2]!=dgn.lower():
+                    data=cambiaconcordanciadeterminante(data,pi,pf,gender,debug)
+    #            data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
+                if agn!='XX':
+                    data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
+        else:
+            if dgn!=agn and agn!='XX':
+                if agn[0]!=dgn[0]:
+                    if agn[0]!='C' and dgn[0]!='C':
+                        gender=agn[0].lower()
+    #                    if dgn[0]=='C':
+    #                        gender=sgn[0].lower()
+                    else:
+                    #    gender='c'
+                        gender=dgn[0].lower()
+                else:
+                    gender=agn[0].lower()
+                if agn[1]!='N':
+                    if agn[1]=='P':
+                        gender=gender+PLURAL
+                    else:
+                        gender=gender+SINGULAR
+                else:
+                    gender=gender+NEUTRAL
+
+                if gender[0:2]!=dgn.lower():
+                    data=cambiaconcordanciadeterminante(data,pi,pf,gender,debug)            
+    else:
+        gender=NEUTRAL
+        if agn[0]!='C':
+            if sgn[0]=='F':
+                gender=FEMALE
+            if sgn[0]=='M':
+                gender=MALE
+        if num!='X':
+            if num=='1':
+                    gender=gender+SINGULAR
+            if num!='1':
+                    gender=gender+PLURAL
+            data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
+            data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
+        else:
+            if sgn!=agn and sgn!='00' and agn!='XX':
+                if sgn[1]=='P':
+                    gender=gender+PLURAL
+                if sgn[1]=='S':
+                    gender=gender+SINGULAR
+                if sgn[1]=='N':
+                    gender=gender+NEUTRAL
+
+                data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
+                data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     return data
 
 def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
@@ -638,6 +769,7 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
     dgn=get_determinantegeneroynumero(data,pi,pf)
     agn=get_adjetivogeneroynumero(data,pi,pf)
     num=get_numbers(data,pi,pf)
+
     if dgn!='XX':
         if dgn!=sgn or dgn!=agn:
             if sgn[0]!=dgn[0]:
@@ -656,6 +788,7 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
             else:
                 gender=gender+NEUTRAL
+
             data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
             data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     else:
@@ -710,7 +843,8 @@ def concordanciadeterminantenombre(data,pi,pf,debug=False):
                 if data[pos+1][0] in atonicafemeninos:
                     data=concordanciaexcepcionfemenino(data,pos,pos+1,debug)
                 else:
-                    data=concordanciadeterminantesustantivo(data,pos,pos+1,debug)
+                    data=concordanciasustantivodeterminante(data,pos,pos+1,debug)
+#                    data=concordanciadeterminantesustantivo(data,pos,pos+1,debug)
         pos=pos+1   
     return data
 
@@ -730,7 +864,6 @@ def concordancianombreadjetivo(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
                 if item[2][3]=='N':
                     gender=gender+NEUTRAL
-
                 data=cambiaconcordanciasadjetivo(data,pos+1,pos+2,gender)
         pos=pos+1   
     return data
@@ -781,6 +914,9 @@ def es_oracionfinal(data,pi,posv,debug=False):
 
 
 def flexionafrase(texto,debug=False):
+
+    if len(texto)>0 and texto[-1]!='.':
+        texto=texto+'.'
     txt=texto.split(']')
     if len(txt)>1:
         textlem = txt[1]
@@ -794,6 +930,14 @@ def flexionafrase(texto,debug=False):
     else:
         textlem = txt[0]
         tiempo = ''
+    if " del " in textlem:
+        replacedel=True
+    else:
+        replacedel=False
+    if " al " in textlem:
+        replaceael=True
+    else:
+        replaceael=False
     textlem=textlem.replace(' del ',' de el ')
     textlem=textlem.replace(' al ', ' a el ')
 #    comas=findOccurrences(textlem, ',')
@@ -811,6 +955,7 @@ def flexionafrase(texto,debug=False):
         data=buscanombrespropios(data,listanombresm,listanombresf,0,0)
         p,nfrases=get_numerofrases(data)
 
+        
         nadv=0
         if nfrases>1:
             nadv=get_numeroadverbiostiempo(textlem.lower())
@@ -830,6 +975,8 @@ def flexionafrase(texto,debug=False):
                 tiempo=get_tiempo(data,0,pf)
             if nadv>1:
                 tiempo=get_tiempo(data,pi,pf)
+#                else:
+#                    tiempo=get_tiempo(data,0,pf)
 
 # detectamos si hay dos verbos seguidos y uno pertenece a la lista verbosgerundios
 # si es así, cambiamos el segundoverbo por el gerundio
@@ -863,7 +1010,8 @@ def flexionafrase(texto,debug=False):
 # Concordancia en frases con preposición 
             for pos in pospc:
                 if pos>=pp:
-                    data=concordanciadeterminantesustantivo(data,pp,pos,debug)
+                    data=concordanciasustantivodeterminante(data,pp,pos,debug)
+#                    data=concordanciadeterminantesustantivo(data,pp,pos,debug)
                     pp=pos+1
 #            if debug:
 #                st.write('antes copulativa:',data)
@@ -879,6 +1027,7 @@ def flexionafrase(texto,debug=False):
             pos=-1
             if posv>=0:
                 penum,pos=get_sujeto(data,pi,posv)
+
             if nextverbsubj:
                 mood=SUBJUNCTIVE
             else:
@@ -893,7 +1042,8 @@ def flexionafrase(texto,debug=False):
                     penum=penumant
                     if verbo in verbos3p:
                         penum=[3,SG]
-                if es_oracionfinal(data,pi-1,posv,debug):
+
+                if es_oracionfinal(data,pi-2,posv,debug):
                     mood=SUBJUNCTIVE
 
             if posv>=0:
@@ -903,38 +1053,49 @@ def flexionafrase(texto,debug=False):
 # de momento, tengo que mirar el pasado de subjuntivo 
                     if mood==SUBJUNCTIVE: 
                         tiempo=PRESENT
-#   por alguna razón la primera vez que se llama a "conjugate" da error, 
+
+                                 #   por alguna razón la primera vez que se llama a "conjugate" da error, 
 #   pero la segunda vez funciona
                     try:
                         verboconjugado=conjugate(verbo,tiempo,penum[0],penum[1],mood=mood)
                     except:
                         verboconjugado=conjugate(verbo,tiempo,penum[0],penum[1],mood=mood)
                     data[posv][0]=verboconjugado
+                    nextverbsubj=False
 
 # comprobamos si es un verbo que requiere luego un subjuntivo
 # verbo +que + subjuntivo
 
             if not nextverbsubj:
-                if data[posv][1] in verbossubjuntivos and data[posv+1][1]=='que':
-                     nextverbsubj=True
+                if posv+1<=pf and data[posv][1] in verbossubjuntivos and data[posv+1][1]=='que':
 
+                    nextverbsubj=True
+#                else:
+#                    nextverbsubj=False
 # comprobamos si la oración anterior termina en "para" y la siguiente empieza por "que". En estos casos el verbo de la oración siguiente
 # se conjuga en subjuntivo
             if es_oracionfinal(data,pf,posv,debug):
                 nextverbsubj=True
 
+
         if len(data)>0:
             textconj=' '.join(x[0] for x in data)   
-            textconj=textconj.replace(' ,',',').replace(' .','.').replace(' de el ', ' del ').replace(' a el ', ' al ')
-
+            textconj=textconj.replace(' ,',',').replace(' .','.')
+            if replacedel:
+                textconj=textconj.replace(' de el ', ' del ')
+            if replaceael:
+                textconj=textconj.replace(' a el ', ' al ')
+    print(textconj)
     return textconj
 
 # ................................................................
 
+
+
 # inicializamos el Analizador Morfológico
 tk,sp,mf,tagger = Analizador()
 # creamos un fichero log donde escribiremos la frases sin flexionar y la frase flexionada
-fout=open('logflexionar2.txt','a')
+fout=open('logflexionarV1.txt','a')
 # create the Flask app
 app = Flask(__name__)
 
@@ -943,11 +1104,16 @@ app = Flask(__name__)
 def frase():
     # get the text from the request
     text = request.args.get('frase').replace('"','')
-    print(text)
-    textconj=flexionafrase(text)
+    txt=text.split(']')
+    texto=text
+    if len(txt)==2 and txt[1].isupper():
+        texto=txt[0]+']'+txt[1].lower()
+    if len(txt)==1 and txt[0].isupper():
+        texto=txt[0].lower()
+    textconj=flexionafrase(texto)
     if len(text)>0:
         print(text,'-->',textconj)
-        fout.write(text+'-->'+textconj+'\n')
+        fout.write(texto+'-->'+textconj+'\n')
         fout.flush()
     return textconj
 
