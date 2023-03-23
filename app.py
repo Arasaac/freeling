@@ -1,10 +1,10 @@
+# se corresponde con democonjugarfrase3.py
 import pyfreeling
 # import flask to get the request data
 from flask import Flask, request 
 from pattern.es import conjugate,PRETERITE, PRESENT, FUTURE, IMPERFECT, SG, PL, PROGRESSIVE, INDICATIVE, SUBJUNCTIVE
-from pattern.es import singularize, pluralize
-from pattern.es import attributive, predicative
-from pattern.es import MALE, FEMALE, NEUTRAL, PLURAL , FEMININE, MASCULINE, SINGULAR
+
+from pattern.es import MALE, FEMALE, NEUTRAL, PLURAL , SINGULAR
 
 
 VOCALES = ("a", "e", "i", "o", "u")
@@ -25,7 +25,9 @@ pronombres = {
         "vosotros": [2, PL],
         "ellos": [3, PL],
         "ellas": [3, PL],
-        "ustedes": [3, PL]
+        "ustedes": [3, PL],
+        "todo": [3, PL],
+        "me": [1, SG]
     }
 
 presente=["hoy","actualmente","ahora","ya"]
@@ -40,7 +42,7 @@ verbos3p=["llover",'nevar', 'granizar', 'nublar', 'oscurecer', 'diluviar', 'llov
 
 verboscopulativos=['ser','estar','parecer']
 
-verbosgerundios=['estar','ir','seguir','llevar']
+verbosgerundios=['estar','ir','seguir','llevar','andar','venir','continuar']
 
 verbossubjuntivos=['desear','admirar','esperar','doler','celebrar','perdonar','disfrutar','dudar','sentir','temer','buscar','dejar','hacer','querer','rogar','exigir','rogar','mandar','pedir']
 
@@ -51,9 +53,11 @@ perifrasis=['tener que','haber que']
 
 subjuntivos=['aunque','como']#,'que','si']
 
-oracionesfinales=['para que']
+oracionesfinales=['para que', 'de que']
 
 verbosexcepciones=['ser','haber']
+
+conjuncion3p=['pero']
 
 conjuncionestemporalespresente=['mientras','cuando']
 
@@ -102,8 +106,8 @@ def Analizador():
                           True,  # NERecognition,     
                           False, # QuantitiesDetection,  
                           True); # ProbabilityAssignment     
- 
-    return tk,sp,mf,tagger #,sen,wsd,parser,dep
+
+    return tk,sp,mf,tagger 
 
 def leer_nombres():
     nombresf=[]
@@ -132,6 +136,27 @@ def lematiza(tk,sp,mf,tagger,texto):
         else:
             tag=w.get_tag()
         data.append([w.get_form().replace('_',' '),w.get_lemma(),tag])
+    return ls,lemas,data
+
+def lematiza2(tk,sp,mf,tagger,texto):
+#   en este lematizador se devuelve el lema y el tag con mayor probabilidad individual
+#   en algunos casos va mejor que el anterior. De momento no se usa
+#   p.e. va bien para la frase "Alfombra ser viejo"
+    l = tk.tokenize(texto)
+    ls = sp.split(l)
+    ls = mf.analyze(ls)	
+    ls = tagger.analyze(ls)
+    data=[]
+    lem=[]
+    for s in ls :
+        for w in s :
+            fisrt=True
+            for a in w :
+                if fisrt:
+                    fisrt=False
+                    data.append([w.get_form().replace('_',' '),a.get_lemma(),a.get_tag()])
+                    lem.append(a.get_lemma())
+    lemas=' '.join(lem)
     return ls,lemas,data
     
 def get_pronombre(data,pi,p):
@@ -183,16 +208,25 @@ def get_conjuncionsubordinante(data,pi,pf):
 
 def get_verbo(data,pi,p):
 #    fp=0
+    nv=0
+    posv=0
+    ritem=[]
     for pos,item in enumerate(data):
         if pos >= pi and pos <=p:
 #            if item[2][0]=='F':
 #                fp=fp+1
-            if (('VM' in item[2]) or ('VS' in item[2]) or ('VA' in item[2])) and (item[2][3:7]=='0000'):
+            if 'VM' in item[2][0:2] and nv==0 and item[2][2]!='P':
+                nv=nv+1
+                posv=pos
+                ritem=item
+            if (('VM' in item[2]) or ('VS' in item[2]) or ('VA' in item[2])) and (item[2][3:7]=='0000') and (nv==0):
                 return item[1],pos#-fp
 #  a veces el verbo no está marcado como tal, por ejemplo en oraciones 
 #  con verbos copulativos
             if any(x in item[1] for x in verboscopulativos):
                 return item[1],pos#-fp
+            if nv>0:
+                return ritem[1],posv
     return '',-1
 
 def get_sujeto(data,pi,p):
@@ -202,6 +236,7 @@ def get_sujeto(data,pi,p):
     ns=0
     nc=0
     np=0
+    ndet=False
     nd='N'
     nums='N'
     for pos,item in enumerate(data):
@@ -210,6 +245,10 @@ def get_sujeto(data,pi,p):
                 nc=nc+1
             if 'D' in item[2][0]:
                 nd=item[2][4]
+                ndet=True
+            if ndet and (('VM' in item[2][0:3]) or ('AQ' in item[2][0:2])):
+                out[0]=3
+                pos0=pos
             if ('NP' in item[2][0:2]) or ('NC' in item[2][0:2]):
                 ns=ns+1
                 if np==0:
@@ -345,12 +384,13 @@ def es_frasecopulativa(data,pi,pf):
         out=True
     return out
 
-def cambia_verbo_gerundio(data,pi,pf):
+def cambia_verbo_gerundio(data,pi,pf,debug=False):
     vestar=False
     p=0
     for pos,item in enumerate(data):
         if pos >= pi and pos <=pf:
-            if (('VMN' in item[2]) and any(x in item[1] for x in verbosgerundios)):
+
+            if (not vestar and ('VMN' in item[2]) and any(x in item[1] for x in verbosgerundios)):
                 vestar=True
                 p=pos
             if vestar and ('VMN' in item[2]) and (pos==p+1):
@@ -553,6 +593,53 @@ def get_sujetogeneroynumero(data,pi,pf):
                 return sgn
     return sgn
 
+def get_sustantivogeneroynumero(data,pi,pf):
+    sgn="NN"
+    gen='F'
+    num='X'
+    nn=False
+    cc=False
+    for pos,item in enumerate(data):
+        if pos >= pi and pos <= pf:
+            if 'CC' in item[2][0:2] and pos>pi:
+                cc=True
+            if 'Z' in item[2][0]:
+                if item[1]!='1':
+                    num='P'
+                else:
+                    num='S'
+            if ('NP' in item[2][0:2]) or ('NC' in item[2][0:2]):
+                sgn=item[2][2:4] 
+                # en frases con sujetos múltiples si hay un sujeto masculino, el género es masculino
+                if sgn[0]=='M':
+                    gen='M'
+                # si el género es común, se toma el género del determinante   
+#                if sgn[0]=='C':
+#                    sgn=get_generodeterminante(data,pi,pos)+sgn[1]
+#                if cc:
+#                    sgn=sgn[0]+'P'
+                nn=True
+            if ('PP' in item[2][0:2]) or ('PI' in item[2][0:2]):
+                sgn=item[2][3:5] 
+                # en frases con sujetos múltiples si hay un sujeto masculino, el género es masculino
+                if sgn[0]=='M':
+                    gen='M'
+                # si el género es común, se toma el género del determinante   
+                if sgn[0]=='C':
+                    sgn=get_generodeterminante(data,pi,pos)+sgn[1]
+                if cc:
+                    sgn=sgn[0]+'P'
+                # si no hya nombre y se detecta un adjetivo calificativo, se toma su género y número
+            if not nn and 'AQ' in item[2][0:2]:
+                sgn=item[2][3:5]           
+            if 'V' in item[2][0] and pos>pi:
+                if num!='X':
+                    sgn=sgn[0]+num
+                if gen=='M':
+                    sgn='M'+sgn[1]
+                return sgn
+    return sgn
+
 def get_adjetivogeneroynumero(data,pi,pf):
     agn="XX"
     verbo=False
@@ -633,9 +720,10 @@ def cambiaconcordanciasadjetivo(data,pi,pf,gender,debug=False):
                 data[pos][2]=data[pos][2][0:5]+gender[0].upper()+gender[1].upper()
             if ('A' in item[2][0]) and (item[2][2:4]!=gender[0:2].upper()):
                 if SINGULAR in gender:
-                    item[0]=item[1] # ponemos el lema)               
+                    item[0]=item[1] # ponemos el lema)
+                
                 agn=cambiageneroynumero(item[0],gender=gender,debug=debug)
-
+#                st.write('cambiaconcordanciasadjetivo:',item[0],gender,agn)
                 data[pos][0]=agn
                 data[pos][2]=data[pos][2][0:3]+gender[0].upper()+gender[1].upper()+data[pos][2][5:]
             if ('N' in item[2][0]) and (item[2][2:4]!=gender[0:2].upper()):
@@ -662,7 +750,6 @@ def concordanciacopulativa(data,pi,pf,posps,posv,debug=False):
 # ahora miramos la concordancia del adjetivo o atributo y su determinante
     dagn=get_determinantegeneroynumero(data,posv,pf[0])
     agn=get_adjetivogeneroynumero(data,posv,pf[0])
-
     if sgn[0]=='C' and dgn[0]!='X':
         sgn=dgn
     if agn[0]!='C':
@@ -676,19 +763,17 @@ def concordanciacopulativa(data,pi,pf,posps,posv,debug=False):
             gender=gender+SINGULAR
     else:
         gender=gender+NEUTRAL
-
     data=cambiaconcordanciadeterminante(data,posv,pf[0],gender,debug=debug)
     data=cambiaconcordanciasadjetivo(data,posv,pf[0],gender,debug=debug)
-#    st.write(data)    
+ 
 
     return data
 
 def concordanciasustantivodeterminante(data,pi,pf,debug=False):
-    sgn=get_sujetogeneroynumero(data,pi,pf)
+    sgn=get_sustantivogeneroynumero(data,pi,pf)
     dgn=get_determinantegeneroynumero(data,pi,pf)
     agn=get_adjetivogeneroynumero(data,pi,pf)
     num=get_numbers(data,pi,pf)
-
     if dgn!='XX':
         if sgn!='NN':
             if dgn!=sgn or (dgn!=agn and agn!='XX'):
@@ -709,7 +794,6 @@ def concordanciasustantivodeterminante(data,pi,pf,debug=False):
                         gender=gender+SINGULAR
                 else:
                     gender=gender+NEUTRAL
-
                 if gender[0:2]!=dgn.lower():
                     data=cambiaconcordanciadeterminante(data,pi,pf,gender,debug)
     #            data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
@@ -734,7 +818,6 @@ def concordanciasustantivodeterminante(data,pi,pf,debug=False):
                         gender=gender+SINGULAR
                 else:
                     gender=gender+NEUTRAL
-
                 if gender[0:2]!=dgn.lower():
                     data=cambiaconcordanciadeterminante(data,pi,pf,gender,debug)            
     else:
@@ -759,7 +842,6 @@ def concordanciasustantivodeterminante(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
                 if sgn[1]=='N':
                     gender=gender+NEUTRAL
-
                 data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
                 data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     return data
@@ -769,7 +851,6 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
     dgn=get_determinantegeneroynumero(data,pi,pf)
     agn=get_adjetivogeneroynumero(data,pi,pf)
     num=get_numbers(data,pi,pf)
-
     if dgn!='XX':
         if dgn!=sgn or dgn!=agn:
             if sgn[0]!=dgn[0]:
@@ -788,7 +869,6 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
             else:
                 gender=gender+NEUTRAL
-
             data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
             data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     else:
@@ -813,13 +893,11 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
                 if sgn[1]=='N':
                     gender=gender+NEUTRAL
-
                 data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
                 data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     return data
 
 def concordanciaexcepcionfemenino(data,pi,pf,debug):
-
     if data[pi][1]=='alguno':
         data[pi][1]='algún'
     if data[pi][1]=='uno':
@@ -907,16 +985,17 @@ def comprobarverbocopulativo(data,pi,pf):
 
 def es_oracionfinal(data,pi,posv,debug=False):
     txt=' '.join([item[1] for item in data[pi:pi+2]])
-
     if txt in oracionesfinales:
         return True
     return False
 
-
 def flexionafrase(texto,debug=False):
-
-    if len(texto)>0 and texto[-1]!='.':
+# remove blank spaces at the beginning and end of the text
+    texto=texto.strip()
+# insert a dot at the end of the text if it does not have one
+    if len(texto)>0 and '.' not in texto[-1]:
         texto=texto+'.'
+# split the input text into control and sentences. The control, if present, is in the first position
     txt=texto.split(']')
     if len(txt)>1:
         textlem = txt[1]
@@ -930,6 +1009,7 @@ def flexionafrase(texto,debug=False):
     else:
         textlem = txt[0]
         tiempo = ''
+# the lematizer splits some words in two, so we have to join them at the end
     if " del " in textlem:
         replacedel=True
     else:
@@ -941,96 +1021,95 @@ def flexionafrase(texto,debug=False):
     textlem=textlem.replace(' del ',' de el ')
     textlem=textlem.replace(' al ', ' a el ')
 #    comas=findOccurrences(textlem, ',')
+#   the comma is treated as a word, so we have to separate it from the word
     textlem=textlem.replace(', ',' , ')
     textlem = textlem.strip()
     textconj=''
     penum=[3,SG]
-    penumant=[3,SG]
+    penumant=[1,SG]
+#   read the list of spanish names
     listanombresm,listanombresf=leer_nombres()
+    mood=INDICATIVE
     if len(textlem)>1:
-#   En  primer lugar lematizamos y buscamos el número de segmentos
-#   Definición de segmentos:
-
+#   First we lemmatize.
         ls,lema,data=lematiza(tk,sp,mf,tagger,textlem)
+#   We check if the firs word in a proper name as some times the lemmatizer does not recognize it
         data=buscanombrespropios(data,listanombresm,listanombresf,0,0)
+#   We search for the number of segments in the input text
+#   A segment is a group of words that can be a subject, a verb, an object, etc. and it can be separated by a comma or a conjunction
+#   The conjuncion is asigned to the next segment
         p,nfrases=get_numerofrases(data)
-
-        
         nadv=0
+#   If there are more than one segment, we count the number of adverbs of time. We will use this information to decide the time of the verb
         if nfrases>1:
             nadv=get_numeroadverbiostiempo(textlem.lower())
-
         nextverbsubj=False
+#   process each segment
         for n in range(0, nfrases):
+#   take the first and last position of the segment
             pi=p[n][0]
             pf=p[n][1]
 
+#   Check if there are proper names in the segment
             data=buscanombrespropios(data,listanombresm,listanombresf,pi,pf)
-            poscs=get_conjuncionsubordinante(data,pi,pf)
+#   Sometimes the segmentator leave the conjuncion in the previous segment, so we have to check if the first word is a conjuncion
+            if n>0:
+                poscs=get_conjuncionsubordinante(data,pi-1,pf-1)
+            else:
+                poscs=get_conjuncionsubordinante(data,pi,pf-1)
             if len(poscs)>0:
                 if data[poscs[0]][1] in conjuncionestemporalespresente:
                     tiempo=PRESENT
+                    nextverbsubj=True
 # esto hay que mejorarlo, buscar los adverbios de tiempo en cada segmento
             if len(tiempo)==0:
                 tiempo=get_tiempo(data,0,pf)
             if nadv>1:
                 tiempo=get_tiempo(data,pi,pf)
-#                else:
-#                    tiempo=get_tiempo(data,0,pf)
 
-# detectamos si hay dos verbos seguidos y uno pertenece a la lista verbosgerundios
-# si es así, cambiamos el segundoverbo por el gerundio
-
-            data=cambia_verbo_gerundio(data,pi,pf)
-            
+#   Detect if there are two verbs in the segment and one of then belongs to the list of gerund verbs.
+#   If so, we change the second verb by the gerund
+            data=cambia_verbo_gerundio(data,pi,pf,debug)
+#   We search for the verb and the position in the segment            
             verbo,posv=get_verbo(data,pi,pf)
+#   We search for the prepositions "SP" before and after the verb
+#   The gender and number concordance is fixed by the name
 
-#   Buscamos si hay preposiciones "SP". La concordancia de género y número 
-#   la fija el determinante a los nombres antes y después de la preposición
-
-# Antes del verbo
+#   Before the verb
             posps=get_preposicion(data,pi,posv)
-# Después del verbo
+#   After the verb
             pospc=get_preposicion(data,posv+1,pf)
 
 #            if debug:
 #                st.write('Preposiciones después del verbo:',posps,pospc)
 #            npospc=len(pospc)
-# la determinación de género y número la fija el determinante
-# si no hay determinante, se fija por el sujeto
-# lo hacemos antes de conjugar para tener la persona del verbo correcta
-
+#   Check the concordance of the determinant and sustantivs
             data=concordanciadeterminantenombre(data,pi,pf,debug)
  
-# Concordancia nombre - adjetivo
-
+#   Check the concordance of the adjective and sustantivs
             data=concordancianombreadjetivo(data,pi,pf,debug)
             pp=posv+1
 
-# Concordancia en frases con preposición 
+#   Concordance in segmentes with preposition after the verb 
             for pos in pospc:
                 if pos>=pp:
                     data=concordanciasustantivodeterminante(data,pp,pos,debug)
-#                    data=concordanciadeterminantesustantivo(data,pp,pos,debug)
                     pp=pos+1
-#            if debug:
-#                st.write('antes copulativa:',data)
-# Si es frase copulativa miramos la concordancia sujeto - atributo
-# hay frases en las que el analizador morfológico no reconoce el verbo ser/parecer/estar como verbo y lo etiqueta como nombre común
-# Para que sea nombre común tiene que ir precedido de un determinante. Vamos a comprobarlo y si no hay determinante lo reetiquetamos 
-# como verbo
+#   If it is a copulative sentence we have to check the concordance of the subject and the attribute
+#   Sometimes the analyzer does not recognize the verb ser/parecer/estar as a verb and it is tagged as a sustantive
+#   We have to check if the verb is a sustantive and it is preceded by a determinante. If so, we change the tag to verb
             data=comprobarverbocopulativo(data,pi,pf)
-
             if es_frasecopulativa(data,pi,pf):
                 cgs=concordanciacopulativa(data,pi,pospc,posps,posv,debug)
-# Buscamos el sujeto para la conjugación del verbo
+#   We serach for the subject and the position in the segment
             pos=-1
             if posv>=0:
                 penum,pos=get_sujeto(data,pi,posv)
-
+#   By default the mood is indicative, but if it is a the previous verb require a subjunctive mood for the next verb, we change the mood
             if nextverbsubj:
                 mood=SUBJUNCTIVE
             else:
+#   If the verb is in the list of verbs that require subjunctive mood, we change the mood
                 mood=INDICATIVE
                 for pp in range(pi,posv):
                     if data[pp][1]=='aunque':
@@ -1039,44 +1118,45 @@ def flexionafrase(texto,debug=False):
                 if pos==-1:
                     if posv>0 and data[posv-1][1] in subjuntivos:
                         mood=SUBJUNCTIVE
-                    penum=penumant
+#   [PP] yo ir al quisco, pero estar cerrado --> yo fui al quiosco, pero estaba cerrado
+#   The second segment hasn't a subject, by default the verb is conjugated in the 3rd person singular
+#   if the main sentence is in past perfect, the second sentence is in past imperfect
+                    if data[pi][0] in conjuncion3p:
+                        penum=[3,SG]
+                        if tiempo==PRETERITE:
+                            tiempo=IMPERFECT
+                    else:
+                        penum=penumant
                     if verbo in verbos3p:
                         penum=[3,SG]
-
                 if es_oracionfinal(data,pi-2,posv,debug):
                     mood=SUBJUNCTIVE
-
+                    nextverbsubj=True
             if posv>=0:
                 penumant=penum
-#   comprobamos si estamos ante una perífrasis verbal
+#   Check is it is a perifrasis verbale
                 if not es_perifrasis(data,posv):
-# de momento, tengo que mirar el pasado de subjuntivo 
+#   At this moment there is only the present of the subjunctive (improve in the future with the past) 
                     if mood==SUBJUNCTIVE: 
                         tiempo=PRESENT
-
-                                 #   por alguna razón la primera vez que se llama a "conjugate" da error, 
-#   pero la segunda vez funciona
+#   for some reason the first call to "conjugate" gives an error, but the second time it works
                     try:
                         verboconjugado=conjugate(verbo,tiempo,penum[0],penum[1],mood=mood)
                     except:
                         verboconjugado=conjugate(verbo,tiempo,penum[0],penum[1],mood=mood)
                     data[posv][0]=verboconjugado
-                    nextverbsubj=False
-
-# comprobamos si es un verbo que requiere luego un subjuntivo
-# verbo +que + subjuntivo
+#   if the previous segment was in subjunctive mood and the next segment has a copulative conjunction, we have follow in subjunctive mood
+                    if nextverbsubj and n<nfrases-1 and data[pf+1][2]!='CC':
+                        nextverbsubj=False
+#   Check if verb requires subjunctive mood in the next segment
+#   verb + que + subjuntive
 
             if not nextverbsubj:
                 if posv+1<=pf and data[posv][1] in verbossubjuntivos and data[posv+1][1]=='que':
-
                     nextverbsubj=True
-#                else:
-#                    nextverbsubj=False
-# comprobamos si la oración anterior termina en "para" y la siguiente empieza por "que". En estos casos el verbo de la oración siguiente
-# se conjuga en subjuntivo
+#   Test if the previous segment ends in "para" and the next segment starts with "que". In this case the verb of the next segment is in subjunctive mood
             if es_oracionfinal(data,pf,posv,debug):
                 nextverbsubj=True
-
 
         if len(data)>0:
             textconj=' '.join(x[0] for x in data)   
@@ -1085,17 +1165,16 @@ def flexionafrase(texto,debug=False):
                 textconj=textconj.replace(' de el ', ' del ')
             if replaceael:
                 textconj=textconj.replace(' a el ', ' al ')
-    print(textconj)
+            textconj=textconj.replace('.','')
     return textconj
 
 # ................................................................
 
 
-
 # inicializamos el Analizador Morfológico
 tk,sp,mf,tagger = Analizador()
 # creamos un fichero log donde escribiremos la frases sin flexionar y la frase flexionada
-fout=open('logflexionarV1.txt','a')
+fout=open('logflexionarV3.txt','a')
 # create the Flask app
 app = Flask(__name__)
 
@@ -1105,12 +1184,16 @@ def frase():
     # get the text from the request
     text = request.args.get('frase').replace('"','')
     txt=text.split(']')
+    mayusculas=False
     texto=text
     if len(txt)==2 and txt[1].isupper():
         texto=txt[0]+']'+txt[1].lower()
     if len(txt)==1 and txt[0].isupper():
         texto=txt[0].lower()
+        mayusculas=True
     textconj=flexionafrase(texto)
+    if mayusculas:
+        textconj=textconj.upper()
     if len(text)>0:
         print(text,'-->',textconj)
         fout.write(texto+'-->'+textconj+'\n')
