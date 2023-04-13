@@ -1,4 +1,3 @@
-# se corresponde con democonjugarfrasev5.py
 # import flask to get the request data
 from flask import Flask, request 
 import pyfreeling
@@ -47,6 +46,8 @@ futuro=["pasado mañana","mañana","futuro","próximo",'después']
 verbos3p=["llover",'nevar', 'granizar', 'nublar', 'oscurecer', 'diluviar', 'lloviznar', 'tronar', 'relampaguear']
 
 verboscopulativos=['ser','estar','parecer']
+
+verbosconjugados=['querer']
 
 verbosgerundios=['estar','ir','seguir','llevar','andar','venir','continuar']
 
@@ -209,18 +210,26 @@ def get_conjuncionsubordinante(data,pi,pf):
 def get_verbo(data,pi,p):
 #    fp=0
     nv=0
+    vc=0
     posv=0
     ritem=[]
     for pos,item in enumerate(data):
         if pos >= pi and pos <=p:
 #            if item[2][0]=='F':
 #                fp=fp+1
-            if 'VM' in item[2][0:2] and nv==0 and item[2][2]!='P':
+            if any(x in item[1] for x in verbosconjugados):
+                posv=pos
+                vc=1
+                ritem=item
+            if 'VM' in item[2][0:2] and nv==0 and vc==0 and item[2][2]!='P':
                 nv=nv+1
                 posv=pos
                 ritem=item
             if (('VM' in item[2]) or ('VS' in item[2]) or ('VA' in item[2])) and (item[2][3:7]=='0000'): # and (nv==0):
-                return item[1],pos#-fp
+                if vc==1:
+                    return ritem[1],posv
+                else:
+                    return item[1],pos#-fp
 #  a veces el verbo no está marcado como tal, por ejemplo en oraciones 
 #  con verbos copulativos
             if any(x in item[1] for x in verboscopulativos):
@@ -1256,6 +1265,7 @@ def flexionafrase(texto,debug=False):
         if len(data)>0:
             textconj=' '.join(x[0] for x in data)   
             textconj=textconj.replace(' ,',',').replace(' .','.')
+            textconj=textconj[0:-1]
             if replacedel:
                 textconj=textconj.replace(' de el ', ' del ')
             if replaceael:
