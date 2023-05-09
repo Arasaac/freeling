@@ -1,4 +1,4 @@
-FROM python:3.8.16-buster AS builder
+FROM python:3.8.16-bullseye AS builder
 
 LABEL maintainer="juandacorreo@gmail.com"
 
@@ -73,13 +73,14 @@ RUN pip install -r requirements.txt
 # este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos 
 # irregulares.este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos irregulares.
 
-COPY es-verbs.txt /usr/local/lib/python3.8/site-packages/pattern/text/es/
+COPY app/es-verbs.txt /usr/local/lib/python3.8/site-packages/pattern/text/es/
 
 # Bundle app source
-COPY . .
+COPY . /app
 EXPOSE 5000
 
+ENTRYPOINT ["./gunicorn.sh"]
 
-CMD ["python3", "app.py"]
+# CMD ["python3", "app.py"]
 
 # CMD echo 'Hello world' | analyze -f en.cfg | grep -c 'world world NN 1'

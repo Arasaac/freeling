@@ -1088,6 +1088,8 @@ def flexionafrase(texto,debug=False):
     if len(txt)>1:
         textlem = txt[1]
         tiempo=''
+        if txt[0][1:]=='P':
+            tiempo= PRESENT
         if txt[0][1:]=='PP':
             tiempo = PRETERITE
         if txt[0][1:]=='PI':    
@@ -1279,7 +1281,7 @@ def flexionafrase(texto,debug=False):
 # inicializamos el Analizador Morfológico
 tk,sp,mf,tagger = Analizador()
 # creamos un fichero log donde escribiremos la frases sin flexionar y la frase flexionada
-fout=open('logflexionarV3.txt','a')
+# fout=open('logflexionarV3.txt','a')
 # create the Flask app
 app = Flask(__name__)
 
@@ -1299,12 +1301,12 @@ def frase():
     textconj=flexionafrase(texto)
     if mayusculas:
         textconj=textconj.upper()
-    if len(text)>0:
-        print(text,'-->',textconj)
-        fout.write(texto+'-->'+textconj+'\n')
-        fout.flush()
+    # if len(text)>0:
+    #     print(text,'-->',textconj)
+    #     fout.write(texto+'-->'+textconj+'\n')
+    #     fout.flush()
     return textconj
 
 # run the app
-if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+# if __name__ == '__main__':
+#     app.run(host='0.0.0.0')
