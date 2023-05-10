@@ -1,8 +1,9 @@
 # freeling
 
+How to use:
+
 ```
-docker build -t freeling:4.2 .   
-docker run  -p5000:5000 freeling:4.2 
+docker run  -p5000:5000 cateduac/arasaac-freeling:1.0.9 
 ```
 
 Ejemplo de uso:
