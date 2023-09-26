@@ -3,7 +3,7 @@
 How to use:
 
 ```
-docker run  -p5000:5000 cateduac/arasaac-freeling:1.0.9 
+docker run  -p5000:5000 cateduac/arasaac-freeling
 ```
 
 Ejemplo de uso:
