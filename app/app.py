@@ -35,7 +35,19 @@ pronombres = {
         "les": [3, PL]
     }
 
+pronombres_nominativos = ["yo", "tú", "él", "ella", "usted", "nosotros", "vosotros", "ellos", "ellas", "ustedes"]
+
 pronombres_demostrativos = ["este", "ese", "aquel", "esta", "esa", "aquella", "estos", "esos", "aquellos", "estas", "esas", "aquellas"]
+
+pronombres_posesivos = ["mío", "tuyo", "suyo", "nuestro", "vuestro", "suyos","mía", "tuya", "suya", "nuestra", "vuestra","suyas"]
+
+pronombres_acusativos =[ "me", "te", "lo", "la", "nos", "os", "los", "las" ]
+
+pronombres_dativos = ["me", "te", "le", "nos", "os", "les"]
+
+pronombres_reflexivos = ["me", "te", "se", "nos", "os", "se"]
+
+pronombres_nonominativos = [ "me", "te", "lo", "la", "nos", "os", "los", "las" , "le", "les", "se"]
 
 presente=["hoy","actualmente","ahora","ya"]
 
@@ -49,7 +61,7 @@ verbos3p=["llover",'nevar', 'granizar', 'nublar', 'oscurecer', 'diluviar', 'llov
 
 verboscopulativos=['ser','estar','parecer']
 
-verbosconjugados=['querer','gustar','asustar']
+verbosconjugados=['gustar','asustar','querer']
 
 verboauxiliar=['haber']
 
@@ -83,12 +95,14 @@ fraseshechascontinua=['para qué sirve','sirve para']
 
 palabrasexcepciones=['dios']
 
+
 def Analizador():
 
     print('Init models')   
     
 
-    DATA = "/usr/local"+"/share/freeling/"	
+# inicilizamos freeling
+	DATA = "/usr/local"+"/share/freeling/"	
 #    DATA = "/usr"+"/share/freeling/"
 # Init locales
     pyfreeling.util_init_locale("default")
@@ -127,9 +141,18 @@ def Analizador():
                           True,  # NERecognition,     
                           False, # QuantitiesDetection,  
                           True); # ProbabilityAssignment     
-
+#    mf.set_active_options(False, False, True, False,  # select which among created 
+#                      True, True, False, True,  # submodules are to be used. 
+#                      True, True, True, True ) # default: all created submodules are used
+# create sense annotator
+#    sen = pyfreeling.senses(DATA+LANG+"/senses.dat");
+# create sense disambiguator
+#    wsd = pyfreeling.ukb(DATA+LANG+"/ukb.dat");
+# create dependency parser
+#    parser= pyfreeling.chart_parser(DATA+LANG+"/chunker/grammar-chunk.dat");
+#    dep = pyfreeling.dep_lstm(DATA+LANG+"/dep_lstm/params-es.dat");
  
-    return tk,sp,mf,tagger
+    return tk,sp,mf,tagger #,sen,wsd,parser,dep
 
 def leer_nombres():
     nombresf=[]
@@ -152,21 +175,22 @@ def lematiza(tk,sp,mf,tagger,texto):
     for s in ls :
         ws = s.get_words()
         lemas=' '.join([w.get_lemma() for w in ws ])
-    for w in ws:
+    for pos,w in enumerate(ws):
         if w.get_lemma() in verbosexcepciones:
             tag='VSN0000'
         else:
             tag=w.get_tag()
         lema=w.get_lemma()
+
 #        if tag[0]=='V' and tag[3]!='0':
 #            tag=tag[0:2]+'N0000'
 #            data.append([lema,lema,tag])
 #        else:
         data.append([w.get_form().replace('_',' '),lema,tag])
-        # check some errors in freeling
-#   some demostrative pronoums are tagged as determinants
     dataout=[]
     for pos,item in enumerate(data):
+        # check some errors in freeling
+#   some demostrative pronoums are tagged as determinants
         if 'DD' in item[2][0:2] and item[0] in pronombres_demostrativos and 'V' in data[pos+1][2][0:1]:
             tag='P'+item[2][1:]
             dataout.append([item[0],item[1],tag])
@@ -178,6 +202,10 @@ def lematiza(tk,sp,mf,tagger,texto):
                 tag='PP3MPA0'
                 item[1]=item[0]
             dataout.append([item[0],item[1],tag])
+        elif 'DA' in item[2][0:2] and item[0]=='los' and 'V' in data[pos-1][2][0:1]:
+            tag='PP3MPA0'
+            item[1]=item[0]
+            dataout.append([item[0],item[1],tag])
         elif 'PI' in item[2][0:2] and 'NC' in data[pos+1][2][0:2]:
             tag='DI'+ item[2][2:-1]
             dataout.append([item[0],item[1],tag])
@@ -187,8 +215,8 @@ def lematiza(tk,sp,mf,tagger,texto):
         else:
             dataout.append(item)
 # some corrections with demostrative pronouns (the analyzer detect only in they are accented and now it is possible to write them without accent)
-    return ls,lemas,data
-
+    return ls,lemas,dataout
+    
 def get_pronombre(data,pi,p):
     out=[1,SG]
     pout=-1
@@ -265,6 +293,7 @@ def get_verbo(data,pi,p):
                 return item[1],pos#-fp
     if nv>0 or vc>0:
         return ritem[1],posv
+
     return '',-1
 
 def get_sujetointerrogativa(data,pi,pf):
@@ -302,8 +331,17 @@ def get_sujeto(data,pi,p,debug=False):
     ndet=False
     nd='N'
     nums='N'
+    rn=0
+    rg=0
     for pos,item in enumerate(data):
         if pos >= pi and pos <= p:
+            if 'RG' in item[2][0:2]:
+# posible adverbio de tiempo que hace de sujeto en tercera persona del singular
+                rg=1
+                pos0=pos
+            if 'RN' in item[2][0:2] and np==1:
+                # ha habido un pronombre personal y le sigue un advervio de negación, si vieno otro pronombre no lo contamos
+                rn=1
             if ('CC' in item[2][0:2]) and pos>pi:
                 nc=nc+1
             if 'D' in item[2][0]:
@@ -322,7 +360,18 @@ def get_sujeto(data,pi,p,debug=False):
                         out=[3, SG]
                         pos0=pos   
                 nums=item[2][3]        
-            if 'PP' in item[2][0:2] or 'PI' in item[2][0:2]:
+            if 'PD' in item[2][0:2]:
+                if np==0:
+                    if 'P' in item[2][2:]:
+                        out=[3, PL]
+                        pos0=pos
+                    else:
+                        out=[3, SG]
+                        pos0=pos   
+                if rn==0:
+                    np=np+1
+#                nums=item[2][3]
+            if ('PP' in item[2][0:2] or 'PI' in item[2][0:2]) and (item[1] not in pronombres_nonominativos):
                 pro=pronombres[item[1]]
                 if pout>-1:
                     if pro[0]==1:
@@ -332,7 +381,8 @@ def get_sujeto(data,pi,p,debug=False):
                 else:
                     out=pro
                 pout=pos
-                np=np+1      
+                if rn==0:
+                    np=np+1      
             if 'Z' in item[2][0]:
                 if item[1]!='1':
                     out=[3,PL]
@@ -341,10 +391,11 @@ def get_sujeto(data,pi,p,debug=False):
                 pos0=pos       
             if 'SP' in item[2][0:2] and (ns>0 or np>0):
                 return out,pos0
-    if debug:
-        print('sujeto ',np,ns,nc,out,pos0)
+      
     if pout>pos0:
         pos0=pout
+    if rg==1 and ns==0 and nc==0 and np==0 and ndet==False and nd=='N':
+        out=[3,SG]
     if (ns>1)and(nc>0):
         out=[3,PL]    
     if np>1:
@@ -355,8 +406,6 @@ def get_sujeto(data,pi,p,debug=False):
         out[1]=PL
         if nd=='S':
             out[1]=SG
-    if debug:
-        print('sujeto return',out,pos0)
     return out,pos0
 
 def get_numerofrases(data):
@@ -420,6 +469,7 @@ def nombre_compuesto(data,p):
     posv=p
     for pos,item in enumerate(data):
         if pos < p:
+            st.write(pos,p,item[1])
             posv=posv+item[1].count('_')
     return posv
 
@@ -483,11 +533,17 @@ def cambiageneroynumero(adjective, gender=MALE,debug=False):
 
     w = adjective.lower()
     # demostrativos
+    if w=='esta':
+        if SINGULAR in gender and MALE in gender:
+            return 'este'
     if w=='este':
         if SINGULAR in gender and FEMALE in gender:   
             return 'esta'
         if PLURAL in gender and FEMALE in gender:
             return 'estas'
+    if w=='esa':
+        if SINGULAR in gender and MALE in gender:
+            return 'ese'
     if w=='ese':
         if SINGULAR in gender and FEMALE in gender:
             return 'esa'
@@ -499,6 +555,21 @@ def cambiageneroynumero(adjective, gender=MALE,debug=False):
                 return 'aquellos'
             if FEMALE in gender:
                 return 'aquellas'
+    if w=='estas':
+        if SINGULAR in gender and MALE in gender:
+            return 'este'
+    if w=='estos':
+        if SINGULAR in gender and FEMALE in gender:
+            return 'esta'
+    if w=='esas':
+        if SINGULAR in gender and MALE in gender:
+            return 'ese'
+    if w=='esos':
+        if SINGULAR in gender and FEMALE in gender:
+            return 'esa'
+    if w=='aquellas':
+        if SINGULAR in gender and MALE in gender:
+            return 'aquel'
     if w=='aquellos':
         if SINGULAR in gender:
             if MALE in gender:
@@ -521,11 +592,15 @@ def cambiageneroynumero(adjective, gender=MALE,debug=False):
         return 'sus'
     if SINGULAR in gender and w=='sus':
         return 'su'
+    if MALE in gender and SINGULAR in gender and w=='lo':
+        return 'el'
     if MALE in gender and SINGULAR in gender and w=='la':
         return 'el'
     if FEMALE in gender and SINGULAR in gender and w=='el':
         return 'la'
     if SINGULAR in gender and MALE in gender and w=='los':
+        return 'el'
+    if SINGULAR in gender and MALE in gender and w=='las':
         return 'el'
     if PLURAL in gender and FEMALE in gender:
         if w=='el':
@@ -583,6 +658,10 @@ def cambiageneroynumero(adjective, gender=MALE,debug=False):
     if SINGULAR in gender:
         if w.endswith(("os", "as")):
             w = w[:-1]
+            if FEMALE in gender:
+                w = w[:-1]+'a'
+            else:
+                w = w[:-1]+'o'
     # horribles => horrible, humorales => humoral
         if w.endswith("es"):
             if len(w) >= 4 and not is_vowel(normalize(w[-3])) and not is_vowel(normalize(w[-4])):
@@ -648,7 +727,7 @@ def get_sujetogeneroynumero(data,pi,pf):
                 if cc:
                     sgn=sgn[0]+'P'
                 nn=True
-            if ('PP' in item[2][0:2]) or ('PI' in item[2][0:2]):
+            if ('PP' in item[2][0:2]) or ('PI' in item[2][0:2]) or ('PD' in item[2][0:2]):
                 sgn=item[2][3:5] 
                 # en frases con sujetos múltiples si hay un sujeto masculino, el género es masculino
                 if sgn[0]=='M':
@@ -918,6 +997,7 @@ def concordanciasustantivodeterminante(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
                 if sgn[1]=='N':
                     gender=gender+NEUTRAL
+#                st.write(gender)
                 data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
                 data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     return data
@@ -969,12 +1049,12 @@ def concordanciadeterminantesustantivo(data,pi,pf,debug=False):
                     gender=gender+SINGULAR
                 if sgn[1]=='N':
                     gender=gender+NEUTRAL
+#                st.write(gender)
                 data=cambiaconcordanciasustantivo(data,pi,pf,gender,debug)
                 data=cambiaconcordanciasadjetivo(data,pi,pf,gender,debug)
     return data
 
 def concordanciaexcepcionfemenino(data,pi,pf,debug):
-
     if data[pi][1]=='alguno':
         data[pi][1]='algún'
     if data[pi][1]=='uno':
@@ -1093,6 +1173,19 @@ def corregirverbocomer(texto,data):
     return data
 
 
+def verbosreflexivos(data,debug=False):
+# this function checks if there is a reflexive verb and change the order of the pronoun and the verb
+    pos=0
+    proant=None
+    for pos,item in enumerate(data):
+        if item[2][0:2]=='PP':
+            if proant!=None:
+                if proant[2][0]=='V':
+                    data[pos-1]=item
+                    data[pos]=proant
+        proant=item
+    return data
+
 def flexionafrase(texto,debug=False):
 # remove blank spaces at the beginning and end of the text
     texto=texto.strip()
@@ -1103,6 +1196,7 @@ def flexionafrase(texto,debug=False):
     txttmp=''.join(txttmp)
     for item in fraseshechas:
         if item == txttmp:
+#            conjugar=False
             return texto, texto
     if conjugar:
         for item in fraseshechascontinua:
@@ -1144,6 +1238,8 @@ def flexionafrase(texto,debug=False):
         replaceael=False
     textlem=textlem.replace(' del ',' de el ')
     textlem=textlem.replace(' al ', ' a el ')
+    textlem=textlem.replace('quiero','querer')  # algunos tableros tienen solo "quiero" en lugar de "querer"
+    textlem=textlem.replace('comerme','comer me')  # el lematizador no separa "comerme" en "comer" y "me"
 #    comas=findOccurrences(textlem, ',')
 #   the comma is treated as a word, so we have to separate it from the word
     textlem=textlem.replace(', ',' , ')
@@ -1164,6 +1260,7 @@ def flexionafrase(texto,debug=False):
         data=corregirverbocomer(textlem,data)
 #   We check if the firs word in a proper name as some times the lemmatizer does not recognize it
         data=buscanombrespropios(data,listanombresm,listanombresf,0,len(textlem))#0)
+        data=verbosreflexivos(data,debug)
 #   We search for the number of segments in the input text
 #   A segment is a group of words that can be a subject, a verb, an object, etc. and it can be separated by a comma or a conjunction
 #   The conjuncion is asigned to the next segment
@@ -1197,7 +1294,6 @@ def flexionafrase(texto,debug=False):
                 tiempo=get_tiempo(data,0,pf)
             if nadv>1:
                 tiempo=get_tiempo(data,pi,pf)
-
 #   Detect if there are two verbs in the segment and one of then belongs to the list of gerund verbs.
 #   If so, we change the second verb by the gerund
             data=cambia_verbo_gerundio(data,pi,pf,debug)
@@ -1215,9 +1311,11 @@ def flexionafrase(texto,debug=False):
 #                st.write('Preposiciones después del verbo:',posps,pospc)
 #            npospc=len(pospc)
 #   Check the concordance of the determinant and sustantivs
+
             data=concordanciadeterminantenombre(data,pi,pf,debug)
  
 #   Check the concordance of the adjective and sustantivs
+
             data=concordancianombreadjetivo(data,pi,pf,debug)
             pp=posv+1
 
@@ -1238,8 +1336,6 @@ def flexionafrase(texto,debug=False):
                 if tipofrase=='INT':
                     penum,pos=get_sujetointerrogativa(data,pi,posv+2)
                 if tipofrase=='ENU':
-                    if debug:
-                        print('Entrando a get_sujeto',pi,posv)
                     penum,pos=get_sujeto(data,pi,posv,debug)
 #   By default the mood is indicative, but if it is a the previous verb require a subjunctive mood for the next verb, we change the mood
             if nextverbsubj:
@@ -1275,9 +1371,6 @@ def flexionafrase(texto,debug=False):
 #   At this moment there is only the present of the subjunctive (improve in the future with the past) 
                     if mood==SUBJUNCTIVE: 
                         tiempo=PRESENT
-#   At this moment there is only the present of the subjunctive (improve in the future with the past) 
-                    if mood==SUBJUNCTIVE: 
-                        tiempo=PRESENT
 #  We check if the verb is in the list of verbs that doesn't require a conjugation
                     if any(x in data[posv][1] for x in verbosconjugados) and data[posv][0] != data[posv][1]:
                         conjugar=False
@@ -1286,7 +1379,6 @@ def flexionafrase(texto,debug=False):
                     if any(x in data[posv][0] for x in verboauxiliar)  and data[posv+1][2][0]=='V' and data[posv+1][2][2]!='P':
                         data[posv+1][0]=conjugate(data[posv+1][0],PAST+PARTICIPLE) 
                         auxiliar=True       
-
 #   for some reason the first call to "conjugate" gives an error, but the second time it works
                     try:
                         if conjugar:
@@ -1306,16 +1398,20 @@ def flexionafrase(texto,debug=False):
 #   if the previous segment was in subjunctive mood and the next segment has a copulative conjunction, we have follow in subjunctive mood
                     if nextverbsubj and n<nfrases-1 and data[pf+1][2]!='CC':
                         nextverbsubj=False
+
 #   Check if verb requires subjunctive mood in the next segment
 #   verb + que + subjuntive
+ 
             if not nextverbsubj:
                 if posv+1<=pf and data[posv][1] in verbossubjuntivos and data[posv+1][1]=='que':
+
                     nextverbsubj=True
 #   Test if the previous segment ends in "para" and the next segment starts with "que". In this case the verb of the next segment is in subjunctive mood
             if es_oracionfinal(data,pf,posv,debug):
                 nextverbsubj=True
 
         if len(data)>0:
+
             textconj=' '.join(x[0] for x in data)   
             textconj=textconj.replace(' ,',',').replace(' .','.')
             textconj=textconj[0:-1]
@@ -1325,6 +1421,7 @@ def flexionafrase(texto,debug=False):
                 textconj=textconj.replace(' a el ', ' al ')
 
     return textconj
+
 
 # ................................................................
 
@@ -1360,4 +1457,4 @@ def frase():
 
 # run the app
 # if __name__ == '__main__':
-#     app.run(port=8508,host='0.0.0.0')
+#     app.run(port=5508,host='0.0.0.0')
