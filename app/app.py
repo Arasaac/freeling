@@ -35,6 +35,8 @@ pronombres = {
         "les": [3, PL]
     }
 
+pronombres_demostrativos = ["este", "ese", "aquel", "esta", "esa", "aquella", "estos", "esos", "aquellos", "estas", "esas", "aquellas"]
+
 presente=["hoy","actualmente","ahora","ya"]
 
 pasado=["ayer","pasado","anterior","anteayer","anoche"]
@@ -79,13 +81,14 @@ fraseshechas=['cómo estás','es una tontería','lo siento','me gusta','no me gu
         ]
 fraseshechascontinua=['para qué sirve','sirve para']
 
+palabrasexcepciones=['dios']
+
 def Analizador():
 
     print('Init models')   
     
 
-# inicilizamos freeling
-    DATA = "/usr/local"+"/share/freeling/"
+    DATA = "/usr/local"+"/share/freeling/"	
 #    DATA = "/usr"+"/share/freeling/"
 # Init locales
     pyfreeling.util_init_locale("default")
@@ -160,6 +163,30 @@ def lematiza(tk,sp,mf,tagger,texto):
 #            data.append([lema,lema,tag])
 #        else:
         data.append([w.get_form().replace('_',' '),lema,tag])
+        # check some errors in freeling
+#   some demostrative pronoums are tagged as determinants
+    dataout=[]
+    for pos,item in enumerate(data):
+        if 'DD' in item[2][0:2] and item[0] in pronombres_demostrativos and 'V' in data[pos+1][2][0:1]:
+            tag='P'+item[2][1:]
+            dataout.append([item[0],item[1],tag])
+        elif 'DA' in item[2][0:2]  and 'V' in data[pos-1][2][0:1]:
+            if item[0]=='lo':
+                tag='PP3MSA0'
+                item[1]=item[0]
+            if item[0]=='los':
+                tag='PP3MPA0'
+                item[1]=item[0]
+            dataout.append([item[0],item[1],tag])
+        elif 'PI' in item[2][0:2] and 'NC' in data[pos+1][2][0:2]:
+            tag='DI'+ item[2][2:-1]
+            dataout.append([item[0],item[1],tag])
+        elif 'I' in item[2][0:1] and 'Fat' not in data[pos+1][2][0:3] and item[0] in palabrasexcepciones:
+            tag='NPMS0000'
+            dataout.append([item[0],item[1],tag])
+        else:
+            dataout.append(item)
+# some corrections with demostrative pronouns (the analyzer detect only in they are accented and now it is possible to write them without accent)
     return ls,lemas,data
 
 def get_pronombre(data,pi,p):
@@ -314,7 +341,8 @@ def get_sujeto(data,pi,p,debug=False):
                 pos0=pos       
             if 'SP' in item[2][0:2] and (ns>0 or np>0):
                 return out,pos0
-      
+    if debug:
+        print('sujeto ',np,ns,nc,out,pos0)
     if pout>pos0:
         pos0=pout
     if (ns>1)and(nc>0):
@@ -327,6 +355,8 @@ def get_sujeto(data,pi,p,debug=False):
         out[1]=PL
         if nd=='S':
             out[1]=SG
+    if debug:
+        print('sujeto return',out,pos0)
     return out,pos0
 
 def get_numerofrases(data):
@@ -1208,6 +1238,8 @@ def flexionafrase(texto,debug=False):
                 if tipofrase=='INT':
                     penum,pos=get_sujetointerrogativa(data,pi,posv+2)
                 if tipofrase=='ENU':
+                    if debug:
+                        print('Entrando a get_sujeto',pi,posv)
                     penum,pos=get_sujeto(data,pi,posv,debug)
 #   By default the mood is indicative, but if it is a the previous verb require a subjunctive mood for the next verb, we change the mood
             if nextverbsubj:
@@ -1328,4 +1360,4 @@ def frase():
 
 # run the app
 # if __name__ == '__main__':
-#     app.run(host='0.0.0.0')
+#     app.run(port=8508,host='0.0.0.0')
