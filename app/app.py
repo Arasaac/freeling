@@ -102,7 +102,7 @@ def Analizador():
     
 
 # inicilizamos freeling
-	DATA = "/usr/local"+"/share/freeling/"	
+    DATA = "/usr/local"+"/share/freeling/"	
 #    DATA = "/usr"+"/share/freeling/"
 # Init locales
     pyfreeling.util_init_locale("default")
