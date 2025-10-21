@@ -1,5 +1,5 @@
 # import flask to get the request data
-from flask import Flask, request 
+from flask import Flask, request, jsonify 
 import pyfreeling
 
 from pattern.es import conjugate,PRETERITE, PRESENT, FUTURE, IMPERFECT, SG, PL, PROGRESSIVE, INDICATIVE, SUBJUNCTIVE, PARTICIPLE, PAST
@@ -1433,6 +1433,62 @@ tk,sp,mf,tagger = Analizador()
 # create the Flask app
 app = Flask(__name__)
 
+# Load Spanish verb lexicon once
+VERB_LEMMAS = set()
+try:
+    with open('/Users/juanda/code/arasaac/freeling/app/es-verbs.txt', 'r') as fverbs:
+        for line in fverbs:
+            v = line.strip()
+            if v:
+                VERB_LEMMAS.add(v)
+except Exception:
+    # If not available, continue with empty set
+    VERB_LEMMAS = set()
+
+IRREG_PARTICIPLES = {
+    'hecho': 'hacer',
+    'visto': 'ver',
+    'puesto': 'poner',
+    'vuelto': 'volver',
+    'muerto': 'morir',
+    'dicho': 'decir',
+    'escrito': 'escribir',
+    'abierto': 'abrir',
+    'cubierto': 'cubrir',
+    'impreso': 'imprimir',
+    'roto': 'romper',
+    'satisfecho': 'satisfacer',
+}
+
+def participle_or_adj_to_infinitive(word: str) -> str:
+    w = word.lower()
+    if w in IRREG_PARTICIPLES:
+        return IRREG_PARTICIPLES[w]
+    # Regular participles
+    if w.endswith('ado'):
+        cand = w[:-3] + 'ar'
+        return cand if not VERB_LEMMAS or cand in VERB_LEMMAS else cand
+    if w.endswith('ido'):
+        # prefer -er if present in lexicon, otherwise -ir
+        cand_er = w[:-3] + 'er'
+        cand_ir = w[:-3] + 'ir'
+        if VERB_LEMMAS:
+            if cand_er in VERB_LEMMAS:
+                return cand_er
+            if cand_ir in VERB_LEMMAS:
+                return cand_ir
+        # fallback: -er
+        return cand_er
+    # Some adjectives from verbs ending in -to/-so/-cho not in irregular list
+    if w.endswith(('to','so','cho')):
+        # try -er and -ir based on lexicon
+        stem = w[:-2]
+        for suf in ('er','ir','ar'):
+            cand = stem + suf
+            if not VERB_LEMMAS or cand in VERB_LEMMAS:
+                return cand
+    return word
+
 # create a route for the app
 @app.route('/flexionar', methods=['GET'])
 def frase():
@@ -1455,6 +1511,79 @@ def frase():
     #     fout.flush()
     return textconj
 
+
+@app.route('/syntax', methods=['GET'])
+def syntax():
+    # get the text from the request
+    text = request.args.get('frase')
+    if text is None:
+        return jsonify([])
+    # run morphological analysis
+    ls, lemas, data = lematiza(tk, sp, mf, tagger, text)
+
+    def map_word_type_and_tense(tag: str):
+        word_type = None
+        tense = None
+        if not tag:
+            return word_type, tense
+        # Verb tags start with 'V' (e.g., VMI..., VMN..., VMP..., VMG...)
+        if tag[0] == 'V':
+            word_type = 'verb'
+            # finite indicative present usually 'VMI' + 'P' next
+            # Examples: VMI(P) -> present; VMS(P) -> subjunctive present; VMN -> infinitive; VMP -> participle; VMG -> gerund
+            if tag.startswith('VMIP') or tag.startswith('VSIP') or tag.startswith('VAIP') or tag.startswith('VMSP') or tag.startswith('VMIP'):  # present indicative/subjunctive/aux
+                tense = 'present'
+            elif tag.startswith('VMN'):
+                tense = 'infinitive'
+            elif tag.startswith('VMG'):
+                tense = 'gerund'
+            elif tag.startswith('VMP'):
+                tense = 'participle'
+        else:
+            # Noun tags start with 'N' (NC*, NP*)
+            if tag[0] == 'N':
+                word_type = 'noun'
+            # Adjectives start with 'A' (AQ*) but we want past participles as verbs when they are tagged as verbs
+            elif tag[0] == 'A':
+                word_type = 'adjective'
+            elif tag[0] == 'R':
+                word_type = 'adverb'
+            elif tag[0] == 'D':
+                word_type = 'determiner'
+            elif tag[0] == 'P':
+                word_type = 'pronoun'
+            elif tag[0] == 'S':
+                word_type = 'preposition'
+            elif tag[0] == 'C':
+                word_type = 'conjunction'
+            elif tag[0] == 'I':
+                word_type = 'interjection'
+        return word_type, tense
+
+    results = []
+    for form, lemma, tag in data:
+        word_type, tense = map_word_type_and_tense(tag)
+        # outcome rules: default outcome is source; if it's a verb, outcome should be the infinitive (lemma)
+        outcome = form
+        if word_type == 'verb' and lemma:
+            outcome = lemma
+        # Special case: sometimes past participles may be tagged as adjectives (AQ..). If so, try to promote to verb when lemma looks verbal
+        if word_type == 'adjective':
+            lem = lemma or form
+            if lem.endswith('ado') or lem.endswith('ido') or lem.endswith(('to','so','cho')):
+                outcome = participle_or_adj_to_infinitive(lem)
+                word_type = 'verb'
+                tense = None
+        item = {
+            'source': form,
+            'wordType': word_type if word_type else '',
+            'outcome': outcome
+        }
+        if word_type == 'verb' and tense:
+            item['tense'] = tense
+        results.append(item)
+
+    return jsonify(results)
 
 # run the app
 # if __name__ == '__main__':
