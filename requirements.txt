@@ -1,6 +1,5 @@
 Flask==2.2.5
 Werkzeug==2.2.3
-git+https://github.com/clips/pattern@master#egg=Pattern
 beautifulsoup4<4.10
 lxml<5
 numpy<1.20

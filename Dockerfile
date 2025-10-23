@@ -22,6 +22,7 @@ RUN echo "******** Installing dependencies... please wait" && \
 COPY requirements.txt ./
 RUN apt-get update -qq && apt-get install -y git && \
     pip install --upgrade pip && \
+    && pip install --no-deps git+https://github.com/clips/pattern@master#egg=Pattern \
     pip install lxml && \
     pip install --no-cache-dir -r requirements.txt && \
     apt-get remove -y git && apt-get clean -y
