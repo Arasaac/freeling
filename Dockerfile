@@ -1,5 +1,4 @@
-FROM python:3.7.17-slim-bullseye # downgrade python from 3.8 to 3.7 to avoid pattern3 dependency
-
+FROM python:3.7.17-slim-bullseye
 LABEL maintainer="juandacorreo@gmail.com"
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -34,7 +33,6 @@ RUN export FL_VERSION=4.2 && \
     tar xzf FreeLing-langs-src-$FL_VERSION.tar.gz && \
     rm -rf FreeLing-src-$FL_VERSION.tar.gz FreeLing-langs-src-$FL_VERSION.tar.gz && \
     cd /tmp/FreeLing-$FL_VERSION && \
-
     mkdir build && \
     cd build && \
     echo "******** Compiling FreeLing... please wait" && \
