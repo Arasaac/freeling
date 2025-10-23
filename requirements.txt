@@ -1,6 +1,11 @@
 Flask==2.2.5
 Werkzeug==2.2.3
-Pattern==3.6
+git+https://github.com/clips/pattern@master#egg=Pattern
+beautifulsoup4<4.10
+lxml<5
+numpy<1.20
+scipy<1.6
+requests<2.28
 pyfreeling==0.1.1
 gunicorn==20.1.0
 

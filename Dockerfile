@@ -1,4 +1,4 @@
-FROM python:3.7.17-slim-bullseye
+FROM python:3.7.17-slim-bullseye # downgrade python from 3.8 to 3.7 to avoid pattern3 dependency
 
 LABEL maintainer="juandacorreo@gmail.com"
 
@@ -16,7 +16,12 @@ RUN echo "******** Installing dependencies... please wait" && \
       (sed -i 's/^# \(en_US.UTF-8\)/\1/' /etc/locale.gen && locale-gen) || \
       locale-gen en_US.UTF-8 )
 
-      RUN python -m pip install --upgrade pip
+# Install git so pip can fetch Pattern from GitHub and upgrade pip
+RUN apt-get update -qq && apt-get install -y git && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    apt-get remove -y git && apt-get clean -y
+
 
 RUN export FL_VERSION=4.2 && \
 #    export FLINSTALL=/root/freeling && \
@@ -75,7 +80,7 @@ RUN pip install -r requirements.txt
 # este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos 
 # irregulares.este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos irregulares.
 
-COPY app/es-verbs.txt /usr/local/lib/python3.8/site-packages/pattern/text/es/
+COPY app/es-verbs.txt /usr/local/lib/python3.7/site-packages/pattern/text/es/
 
 # Bundle app source
 COPY . /app
