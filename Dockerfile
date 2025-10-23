@@ -16,6 +16,8 @@ RUN echo "******** Installing dependencies... please wait" && \
       locale-gen en_US.UTF-8 )
 
 # Install git so pip can fetch Pattern from GitHub and upgrade pip
+# Install app dependencies
+COPY requirements.txt ./
 RUN apt-get update -qq && apt-get install -y git && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
@@ -67,13 +69,10 @@ RUN apt-get update -qq && \
 # Create app directory
 WORKDIR /app
 
-# Install app dependencies
-COPY requirements.txt ./
+
 ENV LD_LIBRARY_PATH=/usr/local/share/freeling/APIs/python3
 ENV PYTHONPATH=/usr/local/share/freeling/APIs/python3
 
-RUN pip install lxml
-RUN pip install -r requirements.txt
 
 # este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos 
 # irregulares.este fichero pertenece al paquete pattern. Se ha modificado con la conjugación de algunos verbos irregulares.
