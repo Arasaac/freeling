@@ -1,4 +1,4 @@
-FROM python:3.8.16-bullseye AS builder
+FROM python:3.7.17-slim-bullseye
 
 LABEL maintainer="juandacorreo@gmail.com"
 
@@ -15,6 +15,8 @@ RUN echo "******** Installing dependencies... please wait" && \
     ( (echo en_US.UTF-8 UTF-8 >> /var/lib/locales/supported.d/en && locale-gen) || \
       (sed -i 's/^# \(en_US.UTF-8\)/\1/' /etc/locale.gen && locale-gen) || \
       locale-gen en_US.UTF-8 )
+
+      RUN python -m pip install --upgrade pip
 
 RUN export FL_VERSION=4.2 && \
 #    export FLINSTALL=/root/freeling && \

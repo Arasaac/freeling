@@ -1,6 +1,6 @@
 Flask==2.2.5
 Werkzeug==2.2.3
-pattern3
+Pattern==3.6
 pyfreeling==0.1.1
 gunicorn==20.1.0
 
