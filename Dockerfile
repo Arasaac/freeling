@@ -17,10 +17,13 @@ RUN echo "******** Installing dependencies... please wait" && \
 
 # Install git so pip can fetch Pattern from GitHub and upgrade pip
 # Install app dependencies
+# Install lxml first so pyfreeling can build
+
 COPY requirements.txt ./
 RUN apt-get update -qq && apt-get install -y git && \
     pip install --upgrade pip && \
-    pip install -r requirements.txt && \
+    pip install lxml && \
+    pip install --no-cache-dir -r requirements.txt && \
     apt-get remove -y git && apt-get clean -y
 
 
